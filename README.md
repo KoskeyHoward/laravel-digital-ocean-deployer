@@ -33,7 +33,22 @@ php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\Deploy
 2. Publish the GitHub workflow:
 
 ```bash
-php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\DeployerServiceProvider" --tag="github-workflow"
+php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\DeployerServiceProvider" --tag="config"
+```
+
+Edit the `config/deployer.php` file to set your preferred branch name:
+
+```php
+'repository' => [
+    'provider' => 'github',
+    'branch' => 'master', // Change this to your desired branch
+],
+```
+
+Then publish the GitHub workflow with your configured branch:
+
+```bash
+php artisan deployer:publish-workflow
 ```
 
 3. Add the following environment variables to your GitHub repository secrets:

@@ -2,6 +2,16 @@
 
 All notable changes to `laravel-digital-ocean-deployer` will be documented in this file.
 
+## [1.2.0] - 2024-12-26
+
+### Added
+- New `deployer:publish-workflow` command to generate GitHub workflow with configured branch
+- Configurable deployment branch through `config/deployer.php`
+
+### Changed
+- GitHub workflow now uses branch from configuration
+- Updated documentation for workflow publishing
+
 ## [1.1.0] - 2024-12-26
 
 ### Added

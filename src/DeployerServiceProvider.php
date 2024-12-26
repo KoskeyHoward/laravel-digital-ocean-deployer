@@ -5,6 +5,7 @@ namespace Koskey\LaravelDigitalOceanDeployer;
 use Illuminate\Support\ServiceProvider;
 use Koskey\LaravelDigitalOceanDeployer\Commands\DeployCommand;
 use Koskey\LaravelDigitalOceanDeployer\Commands\GenerateKeyCommand;
+use Koskey\LaravelDigitalOceanDeployer\Commands\PublishWorkflowCommand;
 
 class DeployerServiceProvider extends ServiceProvider
 {
@@ -14,6 +15,7 @@ class DeployerServiceProvider extends ServiceProvider
             $this->commands([
                 DeployCommand::class,
                 GenerateKeyCommand::class,
+                PublishWorkflowCommand::class,
             ]);
 
             $this->publishes([
