@@ -10,6 +10,18 @@ You can install the package via composer:
 composer require koskey/laravel-digital-ocean-deployer
 ```
 
+## Updating
+
+To get the latest updates, run:
+
+```bash
+composer update koskey/laravel-digital-ocean-deployer
+```
+
+After updating, check the [CHANGELOG.md](CHANGELOG.md) for any breaking changes or new features.
+
+If you've updated from version 1.0.0, you now have access to the new `deployer:generate-key` command for easier SSH key setup.
+
 ## Configuration
 
 1. Publish the configuration file:
