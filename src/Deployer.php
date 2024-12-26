@@ -270,6 +270,22 @@ class Deployer
         return $this;
     }
 
+    protected function setupSSH(): self
+    {
+        $this->log('Setting up SSH connection...');
+        
+        // Setup SSH key and known hosts
+        $this->runCommand('mkdir -p ~/.ssh/');
+        $this->runCommand("echo '{$this->serverConfig['ssh_key']}' | base64 -d > ~/.ssh/deploy_key");
+        $this->runCommand('chmod 600 ~/.ssh/deploy_key');
+        $this->runCommand('eval "$(ssh-agent -s)"');
+        $this->runCommand('ssh-add ~/.ssh/deploy_key');
+        $this->runCommand("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
+
+        $this->log('SSH setup completed');
+        return $this;
+    }
+
     protected function log(string $message, string $level = 'info'): void
     {
         if ($this->logger) {
