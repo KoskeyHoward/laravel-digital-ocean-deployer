@@ -7,6 +7,7 @@ All notable changes to `laravel-digital-ocean-deployer` will be documented in th
 ### Changed
 - Use `$_SERVER` instead of `env()` for accessing GitHub Actions secrets
 - Improved environment variable handling in GitHub Actions
+- Updated config file structure - requires republishing config (`php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\DeployerServiceProvider" --tag="config" --force`)
 
 ## [1.2.1] - 2024-12-26
 

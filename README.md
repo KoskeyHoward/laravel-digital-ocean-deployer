@@ -22,6 +22,16 @@ After updating, check the [CHANGELOG.md](CHANGELOG.md) for any breaking changes 
 
 If you've updated from version 1.0.0, you now have access to the new `deployer:generate-key` command for easier SSH key setup.
 
+### Important Update Notice for v1.2.2
+
+If you're updating from a previous version, you need to republish the config file:
+
+```bash
+php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\DeployerServiceProvider" --tag="config" --force
+```
+
+This update changes how server configuration is handled, moving from environment variables to GitHub secrets directly.
+
 ## Configuration
 
 1. Publish the configuration file:
