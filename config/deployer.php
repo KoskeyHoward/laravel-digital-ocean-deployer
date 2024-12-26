@@ -5,11 +5,16 @@ return [
     |--------------------------------------------------------------------------
     | Server Configuration
     |--------------------------------------------------------------------------
+    |
+    | These values are automatically pulled from GitHub secrets during deployment.
+    | You don't need to set them in your .env file.
+    |
     */
     'server' => [
-        'host' => env('DO_HOST'),
-        'username' => env('DO_USERNAME'),
-        'path' => env('DO_PATH', '/var/www/html'),
+        'host' => null,      // Uses DO_HOST from GitHub secrets
+        'username' => null,  // Uses DO_USERNAME from GitHub secrets
+        'ssh_key' => null,  // Uses DO_SSH_KEY from GitHub secrets
+        'path' => null,     // Uses DO_PATH from GitHub secrets
     ],
 
     /*
@@ -26,6 +31,9 @@ return [
     |--------------------------------------------------------------------------
     | Deployment Steps
     |--------------------------------------------------------------------------
+    |
+    | Configure which deployment steps should be executed
+    |
     */
     'steps' => [
         'composer_install' => true,
@@ -43,6 +51,9 @@ return [
     |--------------------------------------------------------------------------
     | Hooks
     |--------------------------------------------------------------------------
+    |
+    | Define custom commands to run before or after deployment
+    |
     */
     'hooks' => [
         'before' => [

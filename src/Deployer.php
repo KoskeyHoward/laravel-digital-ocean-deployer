@@ -8,16 +8,25 @@ use Illuminate\Support\Facades\Log;
 class Deployer
 {
     protected array $config;
-    protected array $output = [];
+    protected array $serverConfig;
 
-    public function __construct(array $config)
+    public function __construct()
     {
-        $this->config = $config;
+        $this->config = config('deployer');
+        $this->serverConfig = [
+            'host' => env('DO_HOST'),
+            'username' => env('DO_USERNAME'),
+            'ssh_key' => env('DO_SSH_KEY'),
+            'path' => env('DO_PATH', '/var/www/html'),
+        ];
     }
 
     public function deploy(): bool
     {
         try {
+            // Validate required environment variables
+            $this->validateEnvironment();
+
             $this->runBeforeHooks()
                  ->setupSSH()
                  ->pullCode()
@@ -32,24 +41,42 @@ class Deployer
         }
     }
 
+    protected function validateEnvironment(): void
+    {
+        $required = ['DO_HOST', 'DO_USERNAME', 'DO_SSH_KEY', 'DO_PATH'];
+        $missing = [];
+
+        foreach ($required as $var) {
+            if (empty(env($var))) {
+                $missing[] = $var;
+            }
+        }
+
+        if (!empty($missing)) {
+            throw new \RuntimeException(
+                'Missing required GitHub secrets: ' . implode(', ', $missing)
+            );
+        }
+    }
+
     protected function setupSSH(): self
     {
         // Setup SSH key and known hosts
         Process::run('mkdir -p ~/.ssh/');
-        Process::run('echo "$DO_SSH_KEY" | base64 -d > ~/.ssh/deploy_key');
+        Process::run("echo '{$this->serverConfig['ssh_key']}' | base64 -d > ~/.ssh/deploy_key");
         Process::run('chmod 600 ~/.ssh/deploy_key');
         Process::run('eval "$(ssh-agent -s)"');
         Process::run('ssh-add ~/.ssh/deploy_key');
-        Process::run("ssh-keyscan -H {$this->config['server']['host']} >> ~/.ssh/known_hosts");
+        Process::run("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
 
         return $this;
     }
 
     protected function pullCode(): self
     {
-        $host = $this->config['server']['host'];
-        $user = $this->config['server']['username'];
-        $path = $this->config['server']['path'];
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        $path = $this->serverConfig['path'];
         $branch = $this->config['repository']['branch'];
 
         $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '
@@ -66,9 +93,9 @@ class Deployer
     protected function runDeploymentSteps(): self
     {
         $steps = $this->config['steps'];
-        $host = $this->config['server']['host'];
-        $user = $this->config['server']['username'];
-        $path = $this->config['server']['path'];
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        $path = $this->serverConfig['path'];
 
         $commands = [];
 
@@ -109,49 +136,53 @@ class Deployer
         }
 
         $commandString = implode(' && ', $commands);
-        Process::run("ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} 'cd {$path} && {$commandString}'");
+        $sshCommand = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} 'cd {$path} && {$commandString}'";
+        
+        Process::run($sshCommand);
 
         return $this;
     }
 
     protected function setPermissions(): self
     {
-        $host = $this->config['server']['host'];
-        $user = $this->config['server']['username'];
-        $path = $this->config['server']['path'];
-        $permissions = $this->config['permissions'];
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        $path = $this->serverConfig['path'];
 
-        $commands = [
-            "chmod -R {$permissions['files']} {$path}",
-            "find {$path} -type d -exec chmod {$permissions['directories']} {} \;",
-            "chmod -R {$permissions['storage']} {$path}/storage",
-            "chmod -R {$permissions['bootstrap_cache']} {$path}/bootstrap/cache",
-        ];
+        $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '
+            cd {$path} &&
+            chmod -R 775 storage bootstrap/cache
+        '";
 
-        $commandString = implode(' && ', $commands);
-        Process::run("ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '{$commandString}'");
+        Process::run($command);
 
         return $this;
     }
 
     protected function runBeforeHooks(): self
     {
-        foreach ($this->config['hooks']['before'] as $command) {
-            Process::run($command);
+        if (isset($this->config['hooks']['before'])) {
+            foreach ($this->config['hooks']['before'] as $command) {
+                Process::run($command);
+            }
         }
+
         return $this;
     }
 
     protected function runAfterHooks(): self
     {
-        foreach ($this->config['hooks']['after'] as $command) {
-            Process::run($command);
+        if (isset($this->config['hooks']['after'])) {
+            foreach ($this->config['hooks']['after'] as $command) {
+                Process::run($command);
+            }
         }
+
         return $this;
     }
 
     public function getOutput(): array
     {
-        return $this->output;
+        return [];
     }
 }

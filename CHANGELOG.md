@@ -2,6 +2,16 @@
 
 All notable changes to `laravel-digital-ocean-deployer` will be documented in this file.
 
+## [1.2.1] - 2024-12-26
+
+### Added
+- SSH key configuration in `config/deployer.php`
+
+### Changed
+- Improved SSH key handling in deployment process
+- Better error handling for SSH operations
+- Simplified permissions management
+
 ## [1.2.0] - 2024-12-26
 
 ### Added
