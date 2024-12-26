@@ -7,16 +7,15 @@ use Koskey\LaravelDigitalOceanDeployer\Deployer;
 
 class DeployCommand extends Command
 {
-    protected $signature = 'deploy {--verbose : Display detailed output during deployment}';
+    protected $signature = 'deploy';
     protected $description = 'Deploy the application to DigitalOcean';
 
     public function handle(Deployer $deployer)
     {
         $this->info('Starting deployment...');
-        $verbose = $this->option('verbose');
 
         try {
-            $result = $deployer->deploy($verbose ? function($message) {
+            $result = $deployer->deploy($this->output->isVerbose() ? function($message) {
                 $this->line($message);
             } : null);
 
@@ -29,9 +28,9 @@ class DeployCommand extends Command
             $this->newLine();
             $this->error('✗ Deployment failed!');
             
-            if (!$verbose) {
-                $this->warn('Run with --verbose option to see detailed output:');
-                $this->line('php artisan deploy --verbose');
+            if (!$this->output->isVerbose()) {
+                $this->warn('Run with -v option to see detailed output:');
+                $this->line('php artisan deploy -v');
             }
 
             return Command::FAILURE;
@@ -39,13 +38,13 @@ class DeployCommand extends Command
             $this->newLine();
             $this->error('✗ Deployment failed: ' . $e->getMessage());
             
-            if ($verbose) {
+            if ($this->output->isVerbose()) {
                 $this->newLine();
                 $this->error('Stack trace:');
                 $this->line($e->getTraceAsString());
             } else {
-                $this->warn('Run with --verbose option to see detailed output:');
-                $this->line('php artisan deploy --verbose');
+                $this->warn('Run with -v option to see detailed output:');
+                $this->line('php artisan deploy -v');
             }
 
             return Command::FAILURE;
