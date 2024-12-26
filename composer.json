@@ -1,0 +1,30 @@
+{
+    "name": "koskey/laravel-digital-ocean-deployer",
+    "description": "A Laravel package for automated deployment to DigitalOcean servers",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Koskey\\LaravelDigitalOceanDeployer\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Howard Koskey",
+            "email": "koskeyhoward@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Koskey\\LaravelDigitalOceanDeployer\\DeployerServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
