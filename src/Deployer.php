@@ -11,6 +11,7 @@ class Deployer
     protected array $serverConfig;
     protected $logger;
     protected const TIMEOUT = 300; // 5 minutes timeout
+    protected const CONNECTION_TIMEOUT = 60; // 1 minute for connection test
 
     public function __construct()
     {
@@ -43,6 +44,82 @@ class Deployer
         ];
     }
 
+    protected function testSSHConnection(): void
+    {
+        $this->log('Testing SSH connection...');
+        
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        
+        // Setup SSH key first
+        $this->setupSSH();
+        
+        $this->log("Attempting to connect to {$user}@{$host}...");
+        
+        // Test connection with a simple command
+        $command = "ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key {$user}@{$host} 'echo \"SSH connection successful\"'";
+        
+        try {
+            $result = Process::timeout(self::CONNECTION_TIMEOUT)->run($command);
+            
+            if (!$result->successful()) {
+                $error = $result->errorOutput();
+                $this->log("SSH connection error output: {$error}", 'error');
+                throw new \RuntimeException(
+                    "Failed to connect to server: {$error}\n" .
+                    "Please verify your SSH credentials and server availability."
+                );
+            }
+            
+            $this->log($result->output());
+            $this->log('SSH connection test successful');
+        } catch (\Exception $e) {
+            $this->log("SSH connection attempt failed", 'error');
+            throw new \RuntimeException(
+                "SSH connection failed: {$e->getMessage()}\n" .
+                "Please check:\n" .
+                "1. Server is accessible (try: ping {$host})\n" .
+                "2. SSH port is open (try: nc -zv {$host} 22)\n" .
+                "3. SSH credentials are correct\n" .
+                "4. Firewall settings allow SSH access\n" .
+                "5. The SSH key is properly formatted and base64 encoded"
+            );
+        }
+    }
+
+    protected function setupSSH(): self
+    {
+        $this->log('Setting up SSH connection...');
+        
+        // Setup SSH key and known hosts
+        $this->runCommand('mkdir -p ~/.ssh/');
+        
+        // Save SSH key with debug output
+        $sshKey = $this->serverConfig['ssh_key'];
+        if (empty($sshKey)) {
+            throw new \RuntimeException("SSH key is empty. Please check your environment variables.");
+        }
+        
+        $this->log("Writing SSH key to ~/.ssh/deploy_key...");
+        $this->runCommand("echo '{$sshKey}' | base64 -d > ~/.ssh/deploy_key");
+        
+        // Verify the key was written and is valid
+        if (!file_exists(getenv('HOME') . '/.ssh/deploy_key')) {
+            throw new \RuntimeException("Failed to write SSH key file");
+        }
+        
+        $this->runCommand('chmod 600 ~/.ssh/deploy_key');
+        $this->runCommand('eval "$(ssh-agent -s)"');
+        $this->runCommand('ssh-add ~/.ssh/deploy_key');
+        
+        // Add server to known hosts with debug output
+        $this->log("Adding {$this->serverConfig['host']} to known hosts...");
+        $this->runCommand("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
+
+        $this->log('SSH setup completed');
+        return $this;
+    }
+
     public function deploy(?callable $logger = null): bool
     {
         $this->logger = $logger;
@@ -73,41 +150,6 @@ class Deployer
                 $this->log($e->getTraceAsString());
             }
             return false;
-        }
-    }
-
-    protected function testSSHConnection(): void
-    {
-        $this->log('Testing SSH connection...');
-        
-        $host = $this->serverConfig['host'];
-        $user = $this->serverConfig['username'];
-        
-        // Setup SSH key first
-        $this->setupSSH();
-        
-        // Test connection with a simple command
-        $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} 'echo \"SSH connection successful\"'";
-        
-        try {
-            $result = Process::timeout(30)->run($command);
-            
-            if (!$result->successful()) {
-                throw new \RuntimeException(
-                    "Failed to connect to server: {$result->errorOutput()}\n" .
-                    "Please verify your SSH credentials and server availability."
-                );
-            }
-            
-            $this->log('SSH connection test successful');
-        } catch (\Exception $e) {
-            throw new \RuntimeException(
-                "SSH connection failed: {$e->getMessage()}\n" .
-                "Please check:\n" .
-                "1. Server is accessible\n" .
-                "2. SSH credentials are correct\n" .
-                "3. Firewall settings allow SSH access"
-            );
         }
     }
 
@@ -267,22 +309,6 @@ class Deployer
             $this->log('After hooks completed');
         }
 
-        return $this;
-    }
-
-    protected function setupSSH(): self
-    {
-        $this->log('Setting up SSH connection...');
-        
-        // Setup SSH key and known hosts
-        $this->runCommand('mkdir -p ~/.ssh/');
-        $this->runCommand("echo '{$this->serverConfig['ssh_key']}' | base64 -d > ~/.ssh/deploy_key");
-        $this->runCommand('chmod 600 ~/.ssh/deploy_key');
-        $this->runCommand('eval "$(ssh-agent -s)"');
-        $this->runCommand('ssh-add ~/.ssh/deploy_key');
-        $this->runCommand("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
-
-        $this->log('SSH setup completed');
         return $this;
     }
 
