@@ -57,10 +57,9 @@ class Deployer
         $this->log("Attempting to connect to {$user}@{$host}...");
         
         // Test connection with a simple command
-        $command = "ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key {$user}@{$host} 'echo \"SSH connection successful\"'";
-        
         try {
-            $result = Process::timeout(self::CONNECTION_TIMEOUT)->run($command);
+            $result = Process::timeout(self::CONNECTION_TIMEOUT)
+                ->run("ssh {$host} 'echo \"SSH connection successful\"'");
             
             if (!$result->successful()) {
                 $error = $result->errorOutput();
@@ -91,50 +90,60 @@ class Deployer
     {
         $this->log('Setting up SSH connection...');
         
-        // Setup SSH key and known hosts
+        // Setup SSH directory and files
         $sshDir = getenv('HOME') . '/.ssh';
+        $keyFile = "{$sshDir}/deploy_key";
+        $configFile = "{$sshDir}/config";
+        $knownHostsFile = "{$sshDir}/known_hosts";
+        
         $this->runCommand("mkdir -p {$sshDir}");
         
-        // Save SSH key with debug output
+        // Save SSH key
         $sshKey = $this->serverConfig['ssh_key'];
         if (empty($sshKey)) {
             throw new \RuntimeException("SSH key is empty. Please check your environment variables.");
         }
         
-        $keyFile = "{$sshDir}/deploy_key";
         $this->log("Writing SSH key to {$keyFile}...");
-        
-        // Write key directly to avoid potential shell escaping issues
         if (file_put_contents($keyFile, base64_decode($sshKey)) === false) {
             throw new \RuntimeException("Failed to write SSH key file");
         }
-        
         $this->runCommand("chmod 600 {$keyFile}");
         
-        // Clean up any existing SSH agent
-        $this->runCommand('pkill ssh-agent || true');
+        // Create SSH config
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        $sshConfig = "Host {$host}\n" .
+                    "    HostName {$host}\n" .
+                    "    User {$user}\n" .
+                    "    IdentityFile {$keyFile}\n" .
+                    "    StrictHostKeyChecking no\n" .
+                    "    UserKnownHostsFile {$knownHostsFile}\n" .
+                    "    ConnectTimeout 60\n" .
+                    "    ServerAliveInterval 30\n" .
+                    "    ServerAliveCountMax 4\n" .
+                    "    ControlMaster auto\n" .
+                    "    ControlPath {$sshDir}/control-%h-%p-%r\n" .
+                    "    ControlPersist 600\n";
         
-        // Start new SSH agent and add key
-        $result = Process::run('ssh-agent -s');
-        if ($result->successful()) {
-            $output = $result->output();
-            if (preg_match('/SSH_AUTH_SOCK=([^;]+).*SSH_AGENT_PID=(\d+)/s', $output, $matches)) {
-                putenv("SSH_AUTH_SOCK={$matches[1]}");
-                putenv("SSH_AGENT_PID={$matches[2]}");
-                $this->log("Started SSH agent (PID: {$matches[2]})");
-            }
+        $this->log("Creating SSH config...");
+        if (file_put_contents($configFile, $sshConfig) === false) {
+            throw new \RuntimeException("Failed to write SSH config file");
         }
-        
-        $this->runCommand("ssh-add {$keyFile}");
+        $this->runCommand("chmod 600 {$configFile}");
         
         // Add server to known hosts
-        $host = $this->serverConfig['host'];
         $this->log("Adding {$host} to known hosts...");
-        $knownHostsFile = "{$sshDir}/known_hosts";
-        $this->runCommand("ssh-keyscan -H {$host} >> {$knownHostsFile}");
-
+        $this->runCommand("ssh-keyscan -H {$host} >> {$knownHostsFile} 2>/dev/null || true");
+        
         $this->log('SSH setup completed');
         return $this;
+    }
+
+    protected function runSSHCommand(string $command): void
+    {
+        $host = $this->serverConfig['host'];
+        $this->runCommand("ssh {$host} '{$command}'");
     }
 
     public function deploy(?callable $logger = null): bool
@@ -204,15 +213,6 @@ class Deployer
         if ($this->logger && $result->output()) {
             $this->log($result->output());
         }
-    }
-
-    protected function runSSHCommand(string $command): void
-    {
-        $host = $this->serverConfig['host'];
-        $user = $this->serverConfig['username'];
-        
-        $sshCommand = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '{$command}'";
-        $this->runCommand($sshCommand);
     }
 
     protected function pullCode(): self
