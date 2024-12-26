@@ -92,7 +92,8 @@ class Deployer
         $this->log('Setting up SSH connection...');
         
         // Setup SSH key and known hosts
-        $this->runCommand('mkdir -p ~/.ssh/');
+        $sshDir = getenv('HOME') . '/.ssh';
+        $this->runCommand("mkdir -p {$sshDir}");
         
         // Save SSH key with debug output
         $sshKey = $this->serverConfig['ssh_key'];
@@ -100,21 +101,37 @@ class Deployer
             throw new \RuntimeException("SSH key is empty. Please check your environment variables.");
         }
         
-        $this->log("Writing SSH key to ~/.ssh/deploy_key...");
-        $this->runCommand("echo '{$sshKey}' | base64 -d > ~/.ssh/deploy_key");
+        $keyFile = "{$sshDir}/deploy_key";
+        $this->log("Writing SSH key to {$keyFile}...");
         
-        // Verify the key was written and is valid
-        if (!file_exists(getenv('HOME') . '/.ssh/deploy_key')) {
+        // Write key directly to avoid potential shell escaping issues
+        if (file_put_contents($keyFile, base64_decode($sshKey)) === false) {
             throw new \RuntimeException("Failed to write SSH key file");
         }
         
-        $this->runCommand('chmod 600 ~/.ssh/deploy_key');
-        $this->runCommand('eval "$(ssh-agent -s)"');
-        $this->runCommand('ssh-add ~/.ssh/deploy_key');
+        $this->runCommand("chmod 600 {$keyFile}");
         
-        // Add server to known hosts with debug output
-        $this->log("Adding {$this->serverConfig['host']} to known hosts...");
-        $this->runCommand("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
+        // Clean up any existing SSH agent
+        $this->runCommand('pkill ssh-agent || true');
+        
+        // Start new SSH agent and add key
+        $result = Process::run('ssh-agent -s');
+        if ($result->successful()) {
+            $output = $result->output();
+            if (preg_match('/SSH_AUTH_SOCK=([^;]+).*SSH_AGENT_PID=(\d+)/s', $output, $matches)) {
+                putenv("SSH_AUTH_SOCK={$matches[1]}");
+                putenv("SSH_AGENT_PID={$matches[2]}");
+                $this->log("Started SSH agent (PID: {$matches[2]})");
+            }
+        }
+        
+        $this->runCommand("ssh-add {$keyFile}");
+        
+        // Add server to known hosts
+        $host = $this->serverConfig['host'];
+        $this->log("Adding {$host} to known hosts...");
+        $knownHostsFile = "{$sshDir}/known_hosts";
+        $this->runCommand("ssh-keyscan -H {$host} >> {$knownHostsFile}");
 
         $this->log('SSH setup completed');
         return $this;
