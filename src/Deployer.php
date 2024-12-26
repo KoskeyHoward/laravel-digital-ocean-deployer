@@ -14,10 +14,10 @@ class Deployer
     {
         $this->config = config('deployer');
         $this->serverConfig = [
-            'host' => env('DO_HOST'),
-            'username' => env('DO_USERNAME'),
-            'ssh_key' => env('DO_SSH_KEY'),
-            'path' => env('DO_PATH', '/var/www/html'),
+            'host' => $_SERVER['DO_HOST'] ?? null,
+            'username' => $_SERVER['DO_USERNAME'] ?? null,
+            'ssh_key' => $_SERVER['DO_SSH_KEY'] ?? null,
+            'path' => $_SERVER['DO_PATH'] ?? '/var/www/html',
         ];
     }
 
@@ -47,7 +47,7 @@ class Deployer
         $missing = [];
 
         foreach ($required as $var) {
-            if (empty(env($var))) {
+            if (empty($_SERVER[$var])) {
                 $missing[] = $var;
             }
         }

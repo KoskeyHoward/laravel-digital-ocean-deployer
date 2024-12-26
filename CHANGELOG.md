@@ -2,6 +2,12 @@
 
 All notable changes to `laravel-digital-ocean-deployer` will be documented in this file.
 
+## [1.2.2] - 2024-12-26
+
+### Changed
+- Use `$_SERVER` instead of `env()` for accessing GitHub Actions secrets
+- Improved environment variable handling in GitHub Actions
+
 ## [1.2.1] - 2024-12-26
 
 ### Added
