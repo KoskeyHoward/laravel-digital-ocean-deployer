@@ -33,26 +33,26 @@ php artisan vendor:publish --provider="Koskey\LaravelDigitalOceanDeployer\Deploy
 
 ### Getting Your Base64 Encoded SSH Key
 
-To get your base64 encoded SSH private key, follow these steps:
+The package provides an easy way to get your base64 encoded SSH key. After installation, run:
 
-1. Locate your SSH private key (usually in `~/.ssh/id_rsa`):
 ```bash
-cat ~/.ssh/id_rsa
+php artisan deployer:generate-key
 ```
 
-2. Convert it to base64:
+This command will:
+1. Find your SSH private key (usually in `~/.ssh/id_rsa`)
+2. Convert it to base64 format
+3. Display both the encoded private key (for GitHub) and the public key (for your server)
+4. If no SSH key is found, it can generate a new key pair for you
+
+You can also specify a custom path to your SSH key:
 ```bash
-cat ~/.ssh/id_rsa | base64
+php artisan deployer:generate-key --path=/path/to/your/key
 ```
 
-3. Copy the entire output (it should be one long string without line breaks)
+Add the base64 encoded output as the value for `DO_SSH_KEY` in your GitHub repository secrets.
 
-4. Add this base64 encoded string as the value for `DO_SSH_KEY` in your GitHub repository secrets
-
-Note: Make sure you're using the private key that has access to your DigitalOcean server. If you haven't set up SSH keys yet, you can create them using:
-```bash
-ssh-keygen -t rsa -b 4096
-```
+Note: Make sure the corresponding public key is added to your DigitalOcean server's `~/.ssh/authorized_keys` file.
 
 ## Usage
 
