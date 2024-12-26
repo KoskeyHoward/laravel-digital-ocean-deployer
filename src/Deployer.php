@@ -50,6 +50,7 @@ class Deployer
         
         $host = $this->serverConfig['host'];
         $user = $this->serverConfig['username'];
+        $keyFile = getenv('HOME') . '/.ssh/deploy_key';
         
         // Setup SSH key first
         $this->setupSSH();
@@ -58,8 +59,8 @@ class Deployer
         
         // Test connection with a simple command
         try {
-            $result = Process::timeout(self::CONNECTION_TIMEOUT)
-                ->run("ssh {$host} 'echo \"SSH connection successful\"'");
+            $sshCommand = "ssh -i {$keyFile} {$user}@{$host} 'echo \"SSH connection successful\"'";
+            $result = Process::timeout(self::CONNECTION_TIMEOUT)->run($sshCommand);
             
             if (!$result->successful()) {
                 $error = $result->errorOutput();
@@ -143,7 +144,11 @@ class Deployer
     protected function runSSHCommand(string $command): void
     {
         $host = $this->serverConfig['host'];
-        $this->runCommand("ssh {$host} '{$command}'");
+        $user = $this->serverConfig['username'];
+        $keyFile = getenv('HOME') . '/.ssh/deploy_key';
+        
+        $sshCommand = "ssh -i {$keyFile} {$user}@{$host} '{$command}'";
+        $this->runCommand($sshCommand);
     }
 
     public function deploy(?callable $logger = null): bool
