@@ -6,8 +6,18 @@ return [
     | Server Configuration
     |--------------------------------------------------------------------------
     |
-    | These values are automatically pulled from GitHub secrets during deployment.
-    | You don't need to set them in your .env file.
+    | These settings are used to connect to your DigitalOcean server.
+    | For local development, set these in your .env file:
+    |   DO_HOST=your-server-ip
+    |   DO_USERNAME=your-server-username
+    |   DO_SSH_KEY=your-base64-encoded-private-key
+    |   DO_PATH=/path/to/your/app
+    |
+    | For GitHub Actions deployment, set these as repository secrets:
+    |   DO_HOST
+    |   DO_USERNAME
+    |   DO_SSH_KEY
+    |   DO_PATH
     |
     */
     'server' => [
@@ -24,7 +34,7 @@ return [
     */
     'repository' => [
         'provider' => 'github',
-        'branch' => 'main',
+        'branch' => env('DEPLOY_BRANCH', 'main'),
     ],
 
     /*
@@ -32,13 +42,13 @@ return [
     | Deployment Steps
     |--------------------------------------------------------------------------
     |
-    | Configure which deployment steps should be executed
+    | Configure which deployment steps should be executed.
     |
     */
     'steps' => [
         'composer_install' => true,
-        'npm_install' => false,
-        'npm_build' => false,
+        'npm_install' => true,
+        'npm_build' => true,
         'artisan_migrate' => true,
         'artisan_storage_link' => true,
         'artisan_cache_clear' => true,
@@ -49,18 +59,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Hooks
+    | Deployment Hooks
     |--------------------------------------------------------------------------
     |
-    | Define custom commands to run before or after deployment
+    | You may add terminal commands that should be run before or after deployment.
     |
     */
     'hooks' => [
         'before' => [
-            // Add your custom scripts here
+            // 'command to run before deployment',
         ],
         'after' => [
-            // Add your custom scripts here
+            // 'command to run after deployment',
         ],
     ],
 

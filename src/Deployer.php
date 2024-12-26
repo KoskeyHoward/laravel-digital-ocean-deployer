@@ -14,11 +14,31 @@ class Deployer
     public function __construct()
     {
         $this->config = config('deployer');
-        $this->serverConfig = [
-            'host' => $_SERVER['DO_HOST'] ?? null,
-            'username' => $_SERVER['DO_USERNAME'] ?? null,
-            'ssh_key' => $_SERVER['DO_SSH_KEY'] ?? null,
-            'path' => $_SERVER['DO_PATH'] ?? '/var/www/html',
+        $this->serverConfig = $this->getServerConfig();
+    }
+
+    protected function getServerConfig(): array
+    {
+        // Check if we're running in GitHub Actions
+        $isGitHubActions = isset($_SERVER['GITHUB_ACTIONS']) && $_SERVER['GITHUB_ACTIONS'] === 'true';
+
+        if ($isGitHubActions) {
+            $this->log('Running in GitHub Actions environment');
+            return [
+                'host' => $_SERVER['DO_HOST'] ?? null,
+                'username' => $_SERVER['DO_USERNAME'] ?? null,
+                'ssh_key' => $_SERVER['DO_SSH_KEY'] ?? null,
+                'path' => $_SERVER['DO_PATH'] ?? '/var/www/html',
+            ];
+        }
+
+        // Running locally, use Laravel environment variables
+        $this->log('Running in local environment');
+        return [
+            'host' => env('DO_HOST'),
+            'username' => env('DO_USERNAME'),
+            'ssh_key' => env('DO_SSH_KEY'),
+            'path' => env('DO_PATH', '/var/www/html'),
         ];
     }
 
@@ -55,18 +75,18 @@ class Deployer
     protected function validateEnvironment(): void
     {
         $this->log('Validating environment variables...');
-        $required = ['DO_HOST', 'DO_USERNAME', 'DO_SSH_KEY', 'DO_PATH'];
         $missing = [];
 
-        foreach ($required as $var) {
-            if (empty($_SERVER[$var])) {
-                $missing[] = $var;
+        foreach (['host', 'username', 'ssh_key', 'path'] as $key) {
+            if (empty($this->serverConfig[$key])) {
+                $missing[] = 'DO_' . strtoupper($key);
             }
         }
 
         if (!empty($missing)) {
             throw new \RuntimeException(
-                'Missing required GitHub secrets: ' . implode(', ', $missing)
+                'Missing required environment variables: ' . implode(', ', $missing) . 
+                '. Please set these in your .env file for local development or in GitHub secrets for deployment.'
             );
         }
         $this->log('Environment validation successful');
