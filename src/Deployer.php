@@ -10,6 +10,7 @@ class Deployer
     protected array $config;
     protected array $serverConfig;
     protected $logger;
+    protected const TIMEOUT = 300; // 5 minutes timeout
 
     public function __construct()
     {
@@ -51,6 +52,9 @@ class Deployer
             // Validate required environment variables
             $this->validateEnvironment();
 
+            // Test SSH connection before proceeding
+            $this->testSSHConnection();
+
             $this->runBeforeHooks()
                  ->setupSSH()
                  ->pullCode()
@@ -69,6 +73,41 @@ class Deployer
                 $this->log($e->getTraceAsString());
             }
             return false;
+        }
+    }
+
+    protected function testSSHConnection(): void
+    {
+        $this->log('Testing SSH connection...');
+        
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        
+        // Setup SSH key first
+        $this->setupSSH();
+        
+        // Test connection with a simple command
+        $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} 'echo \"SSH connection successful\"'";
+        
+        try {
+            $result = Process::timeout(30)->run($command);
+            
+            if (!$result->successful()) {
+                throw new \RuntimeException(
+                    "Failed to connect to server: {$result->errorOutput()}\n" .
+                    "Please verify your SSH credentials and server availability."
+                );
+            }
+            
+            $this->log('SSH connection test successful');
+        } catch (\Exception $e) {
+            throw new \RuntimeException(
+                "SSH connection failed: {$e->getMessage()}\n" .
+                "Please check:\n" .
+                "1. Server is accessible\n" .
+                "2. SSH credentials are correct\n" .
+                "3. Firewall settings allow SSH access"
+            );
         }
     }
 
@@ -92,38 +131,41 @@ class Deployer
         $this->log('Environment validation successful');
     }
 
-    protected function setupSSH(): self
+    protected function runCommand(string $command): void
     {
-        $this->log('Setting up SSH connection...');
+        $result = Process::timeout(self::TIMEOUT)->run($command);
         
-        // Setup SSH key and known hosts
-        $this->runCommand('mkdir -p ~/.ssh/');
-        $this->runCommand("echo '{$this->serverConfig['ssh_key']}' | base64 -d > ~/.ssh/deploy_key");
-        $this->runCommand('chmod 600 ~/.ssh/deploy_key');
-        $this->runCommand('eval "$(ssh-agent -s)"');
-        $this->runCommand('ssh-add ~/.ssh/deploy_key');
-        $this->runCommand("ssh-keyscan -H {$this->serverConfig['host']} >> ~/.ssh/known_hosts");
+        if (!$result->successful()) {
+            throw new \RuntimeException(
+                "Command failed: {$result->errorOutput()}\n" .
+                "Command: {$command}"
+            );
+        }
 
-        $this->log('SSH setup completed');
-        return $this;
+        if ($this->logger && $result->output()) {
+            $this->log($result->output());
+        }
+    }
+
+    protected function runSSHCommand(string $command): void
+    {
+        $host = $this->serverConfig['host'];
+        $user = $this->serverConfig['username'];
+        
+        $sshCommand = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '{$command}'";
+        $this->runCommand($sshCommand);
     }
 
     protected function pullCode(): self
     {
         $this->log('Pulling latest code from repository...');
         
-        $host = $this->serverConfig['host'];
-        $user = $this->serverConfig['username'];
         $path = $this->serverConfig['path'];
         $branch = $this->config['repository']['branch'];
 
-        $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '
-            cd {$path} &&
-            git fetch --all &&
-            git reset --hard origin/{$branch}
-        '";
-
-        $this->runCommand($command);
+        $command = "cd {$path} && git fetch --all && git reset --hard origin/{$branch}";
+        $this->runSSHCommand($command);
+        
         $this->log('Code pull completed');
         return $this;
     }
@@ -133,10 +175,7 @@ class Deployer
         $this->log('Running deployment steps...');
         
         $steps = $this->config['steps'];
-        $host = $this->serverConfig['host'];
-        $user = $this->serverConfig['username'];
         $path = $this->serverConfig['path'];
-
         $commands = [];
 
         if ($steps['composer_install']) {
@@ -184,10 +223,11 @@ class Deployer
             $commands[] = 'php artisan view:cache';
         }
 
-        $commandString = implode(' && ', $commands);
-        $sshCommand = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} 'cd {$path} && {$commandString}'";
+        if (!empty($commands)) {
+            $commandString = "cd {$path} && " . implode(' && ', $commands);
+            $this->runSSHCommand($commandString);
+        }
         
-        $this->runCommand($sshCommand);
         $this->log('Deployment steps completed');
         return $this;
     }
@@ -196,16 +236,10 @@ class Deployer
     {
         $this->log('Setting directory permissions...');
         
-        $host = $this->serverConfig['host'];
-        $user = $this->serverConfig['username'];
         $path = $this->serverConfig['path'];
-
-        $command = "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key {$user}@{$host} '
-            cd {$path} &&
-            chmod -R 775 storage bootstrap/cache
-        '";
-
-        $this->runCommand($command);
+        $command = "cd {$path} && chmod -R 775 storage bootstrap/cache";
+        
+        $this->runSSHCommand($command);
         $this->log('Permissions set successfully');
         return $this;
     }
@@ -234,21 +268,6 @@ class Deployer
         }
 
         return $this;
-    }
-
-    protected function runCommand(string $command): void
-    {
-        $result = Process::run($command);
-        
-        if (!$result->successful()) {
-            throw new \RuntimeException(
-                "Command failed: {$result->errorOutput()}"
-            );
-        }
-
-        if ($this->logger && $result->output()) {
-            $this->log($result->output());
-        }
     }
 
     protected function log(string $message, string $level = 'info'): void
